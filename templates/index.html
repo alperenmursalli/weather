@@ -251,7 +251,7 @@
 
             function displayMainWeather(data, cityName, airQualityData, uvi) {
                 const unitSymbol = currentUnits === 'metric' ? '°C' : '°F';
-                const speedUnit = currentUnits === 'metric' ? 'km/s' : 'mph';
+                const speedUnit = currentUnits === 'metric' ? 'km/h' : 'mph';
 
                 const isDaily = data.temp && typeof data.temp === 'object';
                 
@@ -272,7 +272,17 @@
                 document.getElementById('windSpeed').textContent = `${(data.wind_speed * 3.6).toFixed(1)} ${speedUnit}`;
                 document.getElementById('humidity').textContent = `%${data.humidity}`;
                 document.getElementById('pressure').textContent = `${data.pressure} hPa`;
-                document.getElementById('visibility').textContent = `${((data.visibility || 10000) / 1000).toFixed(1)} km`;
+                
+                // GÜNCELLENDİ: Görüş mesafesi verisini güvenli bir şekilde işle
+                const visibilityElement = document.getElementById('visibility');
+                if (data.visibility !== undefined && data.visibility !== null) {
+                    visibilityElement.parentElement.classList.remove('hidden');
+                    visibilityElement.textContent = `${(data.visibility / 1000).toFixed(1)} km`;
+                } else {
+                    // Günlük tahminde bu veri olmayacağı için gizle
+                    visibilityElement.parentElement.classList.add('hidden');
+                }
+                
                 document.getElementById('sunrise').textContent = new Date(data.sunrise * 1000).toLocaleTimeString('tr-TR', {hour: '2-digit', minute: '2-digit'});
                 document.getElementById('sunset').textContent = new Date(data.sunset * 1000).toLocaleTimeString('tr-TR', {hour: '2-digit', minute: '2-digit'});
 
@@ -289,7 +299,8 @@
             }
 
             function displayUvIndex(uvi) {
-                const uviValue = uvi || 0;
+                // GÜNCELLENDİ: uvi değeri 0 olduğunda yanlış sonuç vermemesi için `??` kullan
+                const uviValue = uvi ?? 0;
                 const levels = [
                     { limit: 2, text: 'Düşük' }, { limit: 5, text: 'Orta' },
                     { limit: 7, text: 'Yüksek' }, { limit: 10, text: 'Çok Yüksek' },
@@ -320,16 +331,16 @@
                 const position = Math.min(((aqiValue - 1) / 4) * 100, 100);
 
                 aqiDisplay.innerHTML = `
-                     <p class="text-3xl font-bold">${aqiValue}</p>
-                     <p class="text-sm font-semibold" style="color:var(--sub-text);">${currentLevel.text}</p>
-                     <div class="w-full mt-3 px-1">
-                        <div class="relative h-2.5 flex rounded-full bg-gray-200 dark:bg-gray-700">
-                            <div class="h-full flex-1 bg-green-400 rounded-l-full"></div><div class="h-full flex-1 bg-yellow-400"></div>
-                            <div class="h-full flex-1 bg-orange-500"></div><div class="h-full flex-1 bg-red-600"></div>
-                            <div class="h-full flex-1 bg-purple-600 rounded-r-full"></div>
-                            <div class="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-200 shadow-md border-2 border-blue-500 rounded-full" style="left: ${position}%;"></div>
-                        </div>
-                    </div>`;
+                       <p class="text-3xl font-bold">${aqiValue}</p>
+                       <p class="text-sm font-semibold" style="color:var(--sub-text);">${currentLevel.text}</p>
+                       <div class="w-full mt-3 px-1">
+                            <div class="relative h-2.5 flex rounded-full bg-gray-200 dark:bg-gray-700">
+                                <div class="h-full flex-1 bg-green-400 rounded-l-full"></div><div class="h-full flex-1 bg-yellow-400"></div>
+                                <div class="h-full flex-1 bg-orange-500"></div><div class="h-full flex-1 bg-red-600"></div>
+                                <div class="h-full flex-1 bg-purple-600 rounded-r-full"></div>
+                                <div class="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-200 shadow-md border-2 border-blue-500 rounded-full" style="left: ${position}%;"></div>
+                            </div>
+                       </div>`;
             }
 
             function displayRecommendations(oneCall, airQuality) {
