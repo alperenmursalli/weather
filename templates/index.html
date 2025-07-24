@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="tr" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Hava Durumu Modeli</title>
+    <!-- Kütüphaneler -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/skycons/1396634940/skycons.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Tema ve temel stiller */
+        :root { --main-bg: #f0f4f8; --card-bg: #ffffff; --text-color: #1f2937; --sub-text: #6b7280; --border-color: #e5e7eb; }
+        html.dark { --main-bg: #111827; --card-bg: #1f2937; --text-color: #f9fafb; --sub-text: #9ca3af; --border-color: #374151; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--main-bg); color: var(--text-color); transition: background-color 0.3s, color 0.3s; }
+        .card { background-color: var(--card-bg); transition: background-color 0.3s, transform 0.2s; }
+        .card:hover { transform: translateY(-4px); }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        
+        /* Animasyonlar */
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+        /* Kaydırma çubuğu stilleri */
+        #hourlyForecastContainer::-webkit-scrollbar { height: 8px; }
+        #hourlyForecastContainer::-webkit-scrollbar-track { background: var(--border-color); border-radius: 10px; }
+        #hourlyForecastContainer::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+        #hourlyForecastContainer::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-5xl mx-auto">
+        <div class="card p-4 md:p-8 rounded-2xl shadow-lg !transform-none">
+            
+            <!-- Başlık ve Kontroller -->
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl md:text-4xl font-bold">Hava Durumu</h1>
+                <div class="flex items-center gap-4">
+                    <button id="unitToggle" class="font-bold text-lg p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700">°C</button>
+                    <button id="themeToggle" class="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700">
+                        <svg id="theme-icon-light" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                        <svg id="theme-icon-dark" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Arama Çubuğu -->
+            <div class="flex flex-col sm:flex-row gap-2 mb-2">
+                <input type="text" id="cityInput" class="flex-grow p-3 border-2 rounded-lg focus:outline-none focus:border-blue-500 transition-colors card !transform-none" style="border-color: var(--border-color);" placeholder="Şehir adı girin...">
+                <button id="searchButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors">Ara</button>
+                <button id="locationButton" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-colors">
+                    <svg class="w-6 h-6 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                </button>
+            </div>
+            <div id="historyContainer" class="flex flex-wrap gap-2 mb-8 text-sm"></div>
+
+            <!-- Yükleyici, Hata ve Uyarı Mesajları -->
+            <div id="loader" class="hidden justify-center my-8"><div class="loader"></div></div>
+            <div id="errorMessage" class="hidden text-center text-red-500 font-semibold p-4 bg-red-100 dark:bg-red-900/20 rounded-lg"></div>
+            
+            <!-- Hava Durumu Sonuçları -->
+            <div id="weatherResults" class="hidden space-y-8">
+                <!-- Bugüne Dön Butonu -->
+                <div id="backToTodayContainer" class="hidden mb-4">
+                    <button id="backToTodayButton" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 font-bold py-2 px-4 rounded-lg transition-colors">← Bugüne Dön</button>
+                </div>
+                
+                <!-- Anlık Hava Durumu ve Detaylar -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-8">
+                        <div id="currentWeatherCard" class="text-white p-6 rounded-xl shadow-md flex flex-col justify-between transition-all duration-500">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h2 id="currentCity" class="text-3xl font-bold"></h2>
+                                    <p id="currentStatus" class="text-lg capitalize"></p>
+                                    <p id="lastUpdated" class="text-xs opacity-80 mt-1"></p>
+                                </div>
+                                <canvas id="currentIcon" width="80" height="80"></canvas>
+                            </div>
+                            <div class="text-right mt-4">
+                                <p id="currentTemp" class="text-6xl font-bold"></p>
+                                <p id="currentFeelsLike" class="text-sm opacity-80"></p>
+                            </div>
+                        </div>
+                        <div class="card p-6 rounded-xl grid grid-cols-2 gap-y-4 text-center border" style="border-color: var(--border-color);">
+                            <div><p class="text-sm" style="color:var(--sub-text);">Rüzgar</p><p id="windSpeed" class="text-2xl font-bold"></p></div>
+                            <div><p class="text-sm" style="color:var(--sub-text);">Nem</p><p id="humidity" class="text-2xl font-bold"></p></div>
+                            <div><p class="text-sm" style="color:var(--sub-text);">Basınç</p><p id="pressure" class="text-2xl font-bold"></p></div>
+                            <div><p class="text-sm" style="color:var(--sub-text);">Görüş</p><p id="visibility" class="text-2xl font-bold"></p></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-4">
+                        <div class="card p-4 rounded-xl text-center border" style="border-color: var(--border-color);"><p class="text-sm" style="color:var(--sub-text);">Güneş Doğuş</p><p id="sunrise" class="text-2xl font-bold"></p></div>
+                        <div class="card p-4 rounded-xl text-center border" style="border-color: var(--border-color);"><p class="text-sm" style="color:var(--sub-text);">Güneş Batış</p><p id="sunset" class="text-2xl font-bold"></p></div>
+                        <div class="card p-4 rounded-xl border flex flex-col" style="border-color: var(--border-color);">
+                            <p class="text-center text-sm mb-2" style="color:var(--sub-text);">UV İndeksi</p>
+                            <div id="uvIndexDisplay" class="flex-grow flex flex-col items-center justify-center"></div>
+                        </div>
+                        <div class="card p-4 rounded-xl border flex flex-col" style="border-color: var(--border-color);">
+                            <p class="text-center text-sm mb-2" style="color:var(--sub-text);">Hava Kalitesi</p>
+                            <div id="aqiDisplay" class="flex-grow flex flex-col items-center justify-center"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="main-content-sections">
+                    <!-- Akıllı Tavsiyeler -->
+                    <div id="recommendationBox" class="hidden">
+                        <h3 class="text-xl font-bold mb-3">Günün Tavsiyeleri</h3>
+                        <div class="card p-4 rounded-xl border" style="border-color: var(--border-color);">
+                            <ul id="recommendationList" class="space-y-2 text-sm" style="color: var(--sub-text);"></ul>
+                        </div>
+                    </div>
+
+                    <!-- Saatlik Tahmin -->
+                    <div class="card p-6 rounded-xl border mt-8" style="border-color: var(--border-color);">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold">Saatlik Tahmin</h3>
+                            <button id="hourlyViewToggle" class="text-sm font-semibold bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 px-3 py-1 rounded-md">Grafik Göster</button>
+                        </div>
+                        <div id="hourlyForecastContainer" class="flex overflow-x-auto space-x-4 pb-4">
+                            <!-- Saatlik tahmin kartları buraya eklenecek -->
+                        </div>
+                        <div id="temperatureChartContainer" class="hidden">
+                            <canvas id="temperatureChart"></canvas>
+                        </div>
+                    </div>
+                    <!-- Günlük Tahmin Kartları -->
+                    <div class="mt-8">
+                        <h3 class="text-xl font-bold mb-4">Günlük Tahmin</h3>
+                        <div id="forecast" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <footer class="text-center text-sm pt-8" style="color:var(--sub-text);"><p>Geliştiren: Alperen Mursallı</p></footer>
+    </div>
+
+    <script>
+        window.addEventListener('load', () => {
+            
+            // --- Element Referansları ve Durum Değişkenleri ---
+            const cityInput = document.getElementById('cityInput');
+            const searchButton = document.getElementById('searchButton');
+            const locationButton = document.getElementById('locationButton');
+            const loader = document.getElementById('loader');
+            const errorMessage = document.getElementById('errorMessage');
+            const weatherResults = document.getElementById('weatherResults');
+            const historyContainer = document.getElementById('historyContainer');
+            const themeToggle = document.getElementById('themeToggle');
+            const unitToggle = document.getElementById('unitToggle');
+            const recommendationBox = document.getElementById('recommendationBox');
+            const recommendationList = document.getElementById('recommendationList');
+            const uvIndexDisplay = document.getElementById('uvIndexDisplay');
+            const aqiDisplay = document.getElementById('aqiDisplay');
+            const backToTodayContainer = document.getElementById('backToTodayContainer');
+            const backToTodayButton = document.getElementById('backToTodayButton');
+            const mainContentSections = document.getElementById('main-content-sections');
+            const hourlyViewToggle = document.getElementById('hourlyViewToggle');
+            const hourlyForecastContainer = document.getElementById('hourlyForecastContainer');
+            const temperatureChartContainer = document.getElementById('temperatureChartContainer');
+            
+            let tempChart = null;
+            let lastFetchedData = null;
+            const skycons = new Skycons({"color": "white"});
+            const skyconsForecast = new Skycons({"color": "white"}); 
+            const skyconsHourly = new Skycons({"color": "white"});
+            let currentUnits = localStorage.getItem('weather-units') || 'metric';
+            let searchHistory = JSON.parse(localStorage.getItem('weather-history')) || [];
+            let hourlyViewMode = 'cards'; // 'cards' or 'chart'
+
+            // --- Başlatma ---
+            function initializeApp() {
+                if (localStorage.getItem('weather-theme') === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    updateThemeIcons(true);
+                }
+                unitToggle.textContent = currentUnits === 'metric' ? '°C' : '°F';
+                updateHistoryUI();
+                const lastCity = searchHistory[0];
+                if (lastCity) { handleSearch(lastCity); } else { getLocation(); }
+            }
+
+            // --- Olay Dinleyicileri ---
+            searchButton.addEventListener('click', () => handleSearch(cityInput.value));
+            cityInput.addEventListener('keyup', e => { if (e.key === 'Enter') handleSearch(cityInput.value); });
+            locationButton.addEventListener('click', getLocation);
+            themeToggle.addEventListener('click', toggleTheme);
+            unitToggle.addEventListener('click', toggleUnits);
+            backToTodayButton.addEventListener('click', showTodayWeather);
+            hourlyViewToggle.addEventListener('click', toggleHourlyView);
+
+            // --- Ana Veri Çekme Fonksiyonu ---
+            async function getWeatherData({ city, coords }) {
+                showLoader();
+                let url = city ? `/weather/city/${encodeURIComponent(city)}?units=${currentUnits}` : `/weather/coords?lat=${coords.latitude}&lon=${coords.longitude}&units=${currentUnits}`;
+                
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || 'Veri alınamadı.');
+                    lastFetchedData = data;
+                    updateUI(lastFetchedData);
+                    if (data.cityName && data.cityName !== "Bilinmeyen Konum") addToHistory(data.cityName);
+                } catch (error) {
+                    showError(error.message);
+                } finally {
+                    hideLoader();
+                }
+            }
+            
+            // --- Arayüz Güncelleme Fonksiyonları ---
+            function updateUI(data, dayIndex = null) {
+                if (!data || !data.oneCall || !data.airQuality) {
+                    showError("API'den eksik veri alındı.");
+                    return;
+                }
+                errorMessage.classList.add('hidden');
+                weatherResults.classList.remove('hidden');
+                weatherResults.classList.add('fade-in-up');
+
+                if (dayIndex === null) { // Bugünün verisini göster
+                    displayMainWeather(data.oneCall.current, data.cityName, data.airQuality, data.oneCall.current.uvi);
+                    displayRecommendations(data.oneCall, data.airQuality);
+                    displayHourlyForecast(data.oneCall.hourly);
+                    displayTemperatureChart(data.oneCall.hourly);
+                    displayForecast(data.oneCall.daily);
+                    mainContentSections.classList.remove('hidden');
+                    backToTodayContainer.classList.add('hidden');
+                } else { // Seçilen günün verisini göster
+                    const selectedDay = data.oneCall.daily[dayIndex];
+                    const dayName = new Date(selectedDay.dt * 1000).toLocaleDateString('tr-TR', { weekday: 'long' });
+                    displayMainWeather(selectedDay, `${data.cityName} - ${dayName}`, null, selectedDay.uvi);
+                    mainContentSections.classList.add('hidden');
+                    backToTodayContainer.classList.remove('hidden');
+                }
+            }
+
+            function showTodayWeather() {
+                updateUI(lastFetchedData, null);
+            }
+
+            function showForecastDetail(dayIndex) {
+                updateUI(lastFetchedData, dayIndex);
+            }
+
+            function displayMainWeather(data, cityName, airQualityData, uvi) {
+                const unitSymbol = currentUnits === 'metric' ? '°C' : '°F';
+                const speedUnit = currentUnits === 'metric' ? 'km/s' : 'mph';
+
+                const isDaily = data.temp && typeof data.temp === 'object';
+                
+                document.getElementById('currentCity').textContent = cityName;
+                document.getElementById('currentStatus').textContent = data.weather[0].description;
+                document.getElementById('lastUpdated').textContent = `Tarih: ${new Date(data.dt * 1000).toLocaleDateString('tr-TR')}`;
+                
+                const tempValue = isDaily ? data.temp.max : data.temp;
+                const feelsLikeValue = isDaily ? data.feels_like.day : data.feels_like;
+                document.getElementById('currentTemp').textContent = `${Math.round(tempValue)}°`;
+                document.getElementById('currentFeelsLike').textContent = isDaily 
+                    ? `Min: ${Math.round(data.temp.min)}°` 
+                    : `Hissedilen: ${Math.round(feelsLikeValue)}${unitSymbol}`;
+                
+                skycons.set("currentIcon", getSkyconName(data.weather[0].icon));
+                skycons.play();
+
+                document.getElementById('windSpeed').textContent = `${(data.wind_speed * 3.6).toFixed(1)} ${speedUnit}`;
+                document.getElementById('humidity').textContent = `%${data.humidity}`;
+                document.getElementById('pressure').textContent = `${data.pressure} hPa`;
+                document.getElementById('visibility').textContent = `${((data.visibility || 10000) / 1000).toFixed(1)} km`;
+                document.getElementById('sunrise').textContent = new Date(data.sunrise * 1000).toLocaleTimeString('tr-TR', {hour: '2-digit', minute: '2-digit'});
+                document.getElementById('sunset').textContent = new Date(data.sunset * 1000).toLocaleTimeString('tr-TR', {hour: '2-digit', minute: '2-digit'});
+
+                const tempGradient = getTempGradient(tempValue);
+                document.getElementById('currentWeatherCard').style.background = tempGradient;
+
+                displayUvIndex(uvi);
+                if (airQualityData) {
+                    displayAirQuality(airQualityData);
+                    document.getElementById('aqiDisplay').parentElement.classList.remove('hidden');
+                } else {
+                    document.getElementById('aqiDisplay').parentElement.classList.add('hidden');
+                }
+            }
+
+            function displayUvIndex(uvi) {
+                const uviValue = uvi || 0;
+                const levels = [
+                    { limit: 2, text: 'Düşük' }, { limit: 5, text: 'Orta' },
+                    { limit: 7, text: 'Yüksek' }, { limit: 10, text: 'Çok Yüksek' },
+                    { limit: 12, text: 'Ekstrem' }
+                ];
+                let currentLevel = levels.find(l => uviValue <= l.limit) || levels[levels.length - 1];
+                const maxUv = 12;
+                const position = Math.min((uviValue / maxUv) * 100, 100);
+
+                uvIndexDisplay.innerHTML = `
+                    <p class="text-3xl font-bold">${uviValue.toFixed(1)}</p>
+                    <p class="text-sm font-semibold" style="color:var(--sub-text);">${currentLevel.text}</p>
+                    <div class="w-full mt-3 px-1">
+                        <div class="relative h-2.5 flex rounded-full bg-gray-200 dark:bg-gray-700">
+                            <div class="h-full flex-1 bg-green-400 rounded-l-full"></div><div class="h-full flex-1 bg-yellow-400"></div>
+                            <div class="h-full flex-1 bg-orange-500"></div><div class="h-full flex-1 bg-red-600"></div>
+                            <div class="h-full flex-1 bg-purple-600 rounded-r-full"></div>
+                            <div class="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-200 shadow-md border-2 border-blue-500 rounded-full" style="left: ${position}%;"></div>
+                        </div>
+                    </div>`;
+            }
+
+            function displayAirQuality(aqData) {
+                if (!aqData || !aqData.list || !aqData.list.length === 0) return;
+                const aqiValue = aqData.list[0].main.aqi;
+                const levels = [ { text: 'İyi' }, { text: 'Orta' }, { text: 'Hassas' }, { text: 'Sağlıksız' }, { text: 'Çok Sağlıksız' } ];
+                const currentLevel = levels[aqiValue - 1] || levels[0];
+                const position = Math.min(((aqiValue - 1) / 4) * 100, 100);
+
+                aqiDisplay.innerHTML = `
+                     <p class="text-3xl font-bold">${aqiValue}</p>
+                     <p class="text-sm font-semibold" style="color:var(--sub-text);">${currentLevel.text}</p>
+                     <div class="w-full mt-3 px-1">
+                        <div class="relative h-2.5 flex rounded-full bg-gray-200 dark:bg-gray-700">
+                            <div class="h-full flex-1 bg-green-400 rounded-l-full"></div><div class="h-full flex-1 bg-yellow-400"></div>
+                            <div class="h-full flex-1 bg-orange-500"></div><div class="h-full flex-1 bg-red-600"></div>
+                            <div class="h-full flex-1 bg-purple-600 rounded-r-full"></div>
+                            <div class="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-200 shadow-md border-2 border-blue-500 rounded-full" style="left: ${position}%;"></div>
+                        </div>
+                    </div>`;
+            }
+
+            function displayRecommendations(oneCall, airQuality) {
+                const recommendations = [];
+                const uvi = oneCall.current.uvi;
+                const aqi = airQuality.list[0].main.aqi;
+                const weatherId = oneCall.current.weather[0].id;
+                const temp = oneCall.current.temp;
+
+                if (uvi > 10) recommendations.push("<li>☀️ <b>Ekstrem UV uyarısı!</b> Mümkünse dışarı çıkmayın, cildinizi tamamen koruyun.</li>");
+                else if (uvi > 7) recommendations.push("<li>☀️ <b>UV indeksi çok yüksek.</b> Güneş kremi, şapka ve gözlük olmadan dışarı çıkmayın.</li>");
+                else if (uvi > 5) recommendations.push("<li>🌤️ <b>UV indeksi yüksek.</b> Öğle saatlerinde gölgede kalmaya özen gösterin.</li>");
+                else if (uvi > 2) recommendations.push("<li>🌤️ <b>UV indeksi orta düzeyde.</b> Hassas cilde sahipseniz güneş kremi kullanın.</li>");
+                
+                if (aqi >= 4) recommendations.push("<li>😷 <b>Hava kalitesi sağlıksız.</b> Dışarıda maske takmanız ve efordan kaçınmanız önerilir.</li>");
+                else if (aqi === 3) recommendations.push("<li>😷 <b>Hava kalitesi hassas gruplar için sağlıksız.</b> Dikkatli olun.</li>");
+
+                if (weatherId >= 200 && weatherId < 300) recommendations.push("<li>⛈️ <b>Fırtına bekleniyor.</b> Güvenli bir yerde kalın.</li>");
+                else if (weatherId >= 500 && weatherId < 600) recommendations.push("<li>☔ <b>Yağmur bekleniyor.</b> Şemsiyenizi yanınıza almayı unutmayın.</li>");
+                else if (weatherId >= 600 && weatherId < 700) recommendations.push("<li>❄️ <b>Kar yağışı var.</b> Kalın giyinin ve dikkatli olun.</li>");
+
+                if (temp > 32) recommendations.push("<li>🥵 <b>Hava çok sıcak!</b> Bol su için ve serin yerlerde bulunun.</li>");
+                else if (temp < 5) recommendations.push("<li>🥶 <b>Hava oldukça soğuk.</b> Kat kat giyinin.</li>");
+
+                if(recommendations.length > 0) {
+                    recommendationList.innerHTML = recommendations.join('');
+                    recommendationBox.classList.remove('hidden');
+                } else {
+                    recommendationBox.classList.add('hidden');
+                }
+            }
+            
+            function displayHourlyForecast(hourlyData) {
+                const container = hourlyForecastContainer;
+                container.innerHTML = ''; // Önceki içeriği temizle
+
+                hourlyData.slice(0, 24).forEach((hour, index) => {
+                    const card = document.createElement('div');
+                    const tempGradient = getTempGradient(hour.temp);
+                    card.className = "flex-shrink-0 flex flex-col items-center justify-between p-4 rounded-lg w-24 text-white shadow-md transition-transform duration-200 hover:transform hover:-translate-y-1";
+                    card.style.background = tempGradient;
+
+                    const time = new Date(hour.dt * 1000).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                    const temp = Math.round(hour.temp);
+
+                    card.innerHTML = `
+                        <p class="font-semibold text-sm">${time}</p>
+                        <canvas id="hourly-icon-${index}" width="48" height="48"></canvas>
+                        <p class="text-xl font-bold">${temp}°</p>
+                    `;
+
+                    container.appendChild(card);
+                    skyconsHourly.add(`hourly-icon-${index}`, getSkyconName(hour.weather[0].icon));
+                });
+
+                skyconsHourly.play();
+            }
+
+            function displayTemperatureChart(hourlyData) {
+                const ctx = document.getElementById('temperatureChart').getContext('2d');
+                if (tempChart) tempChart.destroy();
+                const labels = hourlyData.slice(0, 25).map(item => new Date(item.dt * 1000).toLocaleTimeString('tr-TR', { hour: '2-digit' }));
+                const temperatures = hourlyData.slice(0, 25).map(item => item.temp);
+                const unitSymbol = currentUnits === 'metric' ? '°C' : '°F';
+                const isDark = document.documentElement.classList.contains('dark');
+
+                const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                if (isDark) {
+                    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
+                    gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+                } else {
+                    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+                    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                }
+
+                tempChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: `Sıcaklık (${unitSymbol})`,
+                            data: temperatures,
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            backgroundColor: gradient,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: 'rgba(59, 130, 246, 1)',
+                            pointRadius: 4,
+                            pointHoverRadius: 7
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                enabled: true,
+                                backgroundColor: isDark ? '#1f2937' : '#ffffff',
+                                titleColor: isDark ? '#f9fafb' : '#1f2937',
+                                bodyColor: isDark ? '#9ca3af' : '#6b7280',
+                                borderColor: isDark ? '#374151' : '#e5e7eb',
+                                borderWidth: 1,
+                                padding: 10,
+                                displayColors: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) { label += ': '; }
+                                        if (context.parsed.y !== null) {
+                                            label += `${context.parsed.y.toFixed(1)}${unitSymbol}`;
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                ticks: { color: isDark ? '#9ca3af' : '#6b7280', callback: value => value + unitSymbol },
+                                grid: { color: isDark ? '#374151' : '#e5e7eb', drawBorder: false, }
+                            },
+                            x: {
+                                ticks: { color: isDark ? '#9ca3af' : '#6b7280' },
+                                grid: { display: false, }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function displayForecast(dailyData) {
+                const forecastContainer = document.getElementById('forecast');
+                forecastContainer.innerHTML = ''; 
+                dailyData.slice(0, 5).forEach((day, index) => {
+                    const dayName = new Date(day.dt * 1000).toLocaleDateString('tr-TR', { weekday: 'short' });
+                    const tempGradient = getTempGradient(day.temp.max);
+                    
+                    const card = document.createElement('button');
+                    card.className = "p-4 rounded-xl text-white shadow-md flex flex-col h-full transition-all duration-500 card";
+                    card.style.background = tempGradient;
+                    card.onclick = () => showForecastDetail(index);
+
+                    card.innerHTML = `
+                        <p class="font-bold text-center">${dayName}</p>
+                        <div class="flex-grow flex flex-col items-center justify-center my-2">
+                            <canvas id="icon${index}" width="56" height="56"></canvas>
+                            <p class="text-3xl font-bold mt-2">${Math.round(day.temp.max)}°</p>
+                            <p class="text-lg opacity-80">${Math.round(day.temp.min)}°</p>
+                        </div>
+                        <p class="text-center text-sm capitalize">${day.weather[0].description}</p>
+                    `;
+                    forecastContainer.appendChild(card);
+                    skyconsForecast.add(`icon${index}`, getSkyconName(day.weather[0].icon));
+                });
+                skyconsForecast.play();
+            }
+
+            // --- Yardımcı Fonksiyonlar ---
+            function handleSearch(query) {
+                const city = query.trim();
+                if (city) getWeatherData({ city });
+                else showError("Lütfen bir şehir adı girin.");
+            }
+
+            function getLocation() {
+                if (navigator.geolocation) { showLoader(); navigator.geolocation.getCurrentPosition( p => getWeatherData({ coords: p.coords }), () => { hideLoader(); showError("Konum bilgisi alınamadı."); });
+                } else { showError("Tarayıcınız konumu desteklemiyor."); }
+            }
+            
+            function toggleHourlyView() {
+                hourlyViewMode = hourlyViewMode === 'cards' ? 'chart' : 'cards';
+                if (hourlyViewMode === 'chart') {
+                    hourlyForecastContainer.classList.add('hidden');
+                    temperatureChartContainer.classList.remove('hidden');
+                    hourlyViewToggle.textContent = 'Kartları Göster';
+                } else {
+                    hourlyForecastContainer.classList.remove('hidden');
+                    temperatureChartContainer.classList.add('hidden');
+                    hourlyViewToggle.textContent = 'Grafik Göster';
+                }
+            }
+
+            function toggleTheme() {
+                const isDark = document.documentElement.classList.toggle('dark');
+                localStorage.setItem('weather-theme', isDark ? 'dark' : 'light');
+                updateThemeIcons(isDark);
+                if (lastFetchedData) { 
+                    displayTemperatureChart(lastFetchedData.oneCall.hourly);
+                }
+            }
+
+            function toggleUnits() {
+                currentUnits = currentUnits === 'metric' ? 'imperial' : 'metric';
+                localStorage.setItem('weather-units', currentUnits);
+                unitToggle.textContent = currentUnits === 'metric' ? '°C' : '°F';
+                const currentCity = document.getElementById('currentCity').textContent.split(' - ')[0];
+                if (currentCity) handleSearch(currentCity);
+            }
+
+            function interpolateColor(color1, color2, factor) {
+                const result = color1.slice();
+                for (let i = 0; i < 3; i++) {
+                    result[i] = Math.round(result[i] + factor * (color2[i] - color1[i]));
+                }
+                return result;
+            }
+
+            function getTempGradient(temp) {
+                if (currentUnits !== 'metric') temp = (temp - 32) * 5 / 9;
+
+                const colorStops = [
+                    { temp: -15, color: [74, 85, 104] },    // slate-700
+                    { temp: 0,   color: [99, 179, 237] },   // blue-400
+                    { temp: 15,  color: [79, 209, 197] },   // teal-400
+                    { temp: 25,  color: [246, 173, 85] },   // orange-400
+                    { temp: 35,  color: [245, 101, 101] }   // red-500
+                ];
+
+                if (temp <= colorStops[0].temp) {
+                    const color = colorStops[0].color;
+                    return `linear-gradient(to top right, rgb(${color.join(',')}), rgb(${color.map(c => Math.max(0, c - 20)).join(',')}))`;
+                }
+                if (temp >= colorStops[colorStops.length - 1].temp) {
+                    const color = colorStops[colorStops.length - 1].color;
+                    return `linear-gradient(to top right, rgb(${color.join(',')}), rgb(${color.map(c => Math.max(0, c - 20)).join(',')}))`;
+                }
+
+                let startStop, endStop;
+                for (let i = 0; i < colorStops.length - 1; i++) {
+                    if (temp >= colorStops[i].temp && temp < colorStops[i + 1].temp) {
+                        startStop = colorStops[i];
+                        endStop = colorStops[i + 1];
+                        break;
+                    }
+                }
+
+                const factor = (temp - startStop.temp) / (endStop.temp - startStop.temp);
+                const color1 = interpolateColor(startStop.color, endStop.color, factor);
+                const color2 = interpolateColor(startStop.color, endStop.color, factor + 0.2);
+
+                return `linear-gradient(to top right, rgb(${color1.join(',')}), rgb(${color2.join(',')}))`;
+            }
+            
+            function showLoader() { loader.classList.remove('hidden'); errorMessage.classList.add('hidden'); weatherResults.classList.add('hidden'); }
+            function hideLoader() { loader.classList.add('hidden'); }
+            function showError(message) { hideLoader(); weatherResults.classList.add('hidden'); errorMessage.textContent = `Hata: ${message}`; errorMessage.classList.remove('hidden'); }
+            function getSkyconName(iconCode) { const map = { "01d": "CLEAR_DAY", "01n": "CLEAR_NIGHT", "02d": "PARTLY_CLOUDY_DAY", "02n": "PARTLY_CLOUDY_NIGHT", "03d": "CLOUDY", "03n": "CLOUDY", "04d": "CLOUDY", "04n": "CLOUDY", "09d": "RAIN", "09n": "RAIN", "10d": "RAIN", "10n": "RAIN", "11d": "SLEET", "11n": "SLEET", "13d": "SNOW", "13n": "SNOW", "50d": "FOG", "50n": "FOG" }; return map[iconCode] || "CLOUDY"; }
+            function addToHistory(city) { if (!city) return; const lowerCaseCity = city.toLowerCase(); searchHistory = searchHistory.filter(c => c.toLowerCase() !== lowerCaseCity); searchHistory.unshift(city); searchHistory = searchHistory.slice(0, 5); localStorage.setItem('weather-history', JSON.stringify(searchHistory)); updateHistoryUI(); }
+            function updateHistoryUI() { historyContainer.innerHTML = ''; searchHistory.forEach(city => { const chip = document.createElement('button'); chip.className = "px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"; chip.textContent = city; chip.onclick = () => handleSearch(city); historyContainer.appendChild(chip); }); }
+            function updateThemeIcons(isDark) { 
+                document.getElementById('theme-icon-light').classList.toggle('hidden', isDark);
+                document.getElementById('theme-icon-dark').classList.toggle('hidden', !isDark);
+            }
+
+            // --- Uygulamayı Başlat ---
+            initializeApp();
+        });
+    </script>
+</body>
+</html>
