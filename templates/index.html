@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hava Durumu Modeli</title>
-    <!-- Kütüphaneler -->
+    <!-- guis-->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/skycons/1396634940/skycons.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Google Fonts -->
+    <!-- fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -144,7 +144,7 @@
     <script>
         window.addEventListener('load', () => {
             
-            // --- Element Referansları ve Durum Değişkenleri ---
+            // --- Element References and State Variables ---
             const cityInput = document.getElementById('cityInput');
             const searchButton = document.getElementById('searchButton');
             const locationButton = document.getElementById('locationButton');
@@ -174,7 +174,7 @@
             let searchHistory = JSON.parse(localStorage.getItem('weather-history')) || [];
             let hourlyViewMode = 'cards'; // 'cards' or 'chart'
 
-            // --- Başlatma ---
+            // --- Initialization ---
             function initializeApp() {
                 if (localStorage.getItem('weather-theme') === 'dark') {
                     document.documentElement.classList.add('dark');
@@ -186,7 +186,7 @@
                 if (lastCity) { handleSearch(lastCity); } else { getLocation(); }
             }
 
-            // --- Olay Dinleyicileri ---
+            // --- Event Listeners ---
             searchButton.addEventListener('click', () => handleSearch(cityInput.value));
             cityInput.addEventListener('keyup', e => { if (e.key === 'Enter') handleSearch(cityInput.value); });
             locationButton.addEventListener('click', getLocation);
@@ -195,7 +195,7 @@
             backToTodayButton.addEventListener('click', showTodayWeather);
             hourlyViewToggle.addEventListener('click', toggleHourlyView);
 
-            // --- Ana Veri Çekme Fonksiyonu ---
+            // --- Main Data Fetching Function ---
             async function getWeatherData({ city, coords }) {
                 showLoader();
                 let url = city ? `/weather/city/${encodeURIComponent(city)}?units=${currentUnits}` : `/weather/coords?lat=${coords.latitude}&lon=${coords.longitude}&units=${currentUnits}`;
@@ -214,7 +214,7 @@
                 }
             }
             
-            // --- Arayüz Güncelleme Fonksiyonları ---
+            // --- UI Update Functions ---
             function updateUI(data, dayIndex = null) {
                 if (!data || !data.oneCall || !data.airQuality) {
                     showError("API'den eksik veri alındı.");
@@ -224,7 +224,7 @@
                 weatherResults.classList.remove('hidden');
                 weatherResults.classList.add('fade-in-up');
 
-                if (dayIndex === null) { // Bugünün verisini göster
+                if (dayIndex === null) { // Show today's data
                     displayMainWeather(data.oneCall.current, data.cityName, data.airQuality, data.oneCall.current.uvi);
                     displayRecommendations(data.oneCall, data.airQuality);
                     displayHourlyForecast(data.oneCall.hourly);
@@ -232,7 +232,7 @@
                     displayForecast(data.oneCall.daily);
                     mainContentSections.classList.remove('hidden');
                     backToTodayContainer.classList.add('hidden');
-                } else { // Seçilen günün verisini göster
+                } else { // Show selected day's data
                     const selectedDay = data.oneCall.daily[dayIndex];
                     const dayName = new Date(selectedDay.dt * 1000).toLocaleDateString('tr-TR', { weekday: 'long' });
                     displayMainWeather(selectedDay, `${data.cityName} - ${dayName}`, null, selectedDay.uvi);
@@ -261,25 +261,27 @@
                 
                 const tempValue = isDaily ? data.temp.max : data.temp;
                 const feelsLikeValue = isDaily ? data.feels_like.day : data.feels_like;
-                document.getElementById('currentTemp').textContent = `${Math.round(tempValue)}°`;
+                document.getElementById('currentTemp').textContent = `${Math.round(tempValue)}${unitSymbol}`;
                 document.getElementById('currentFeelsLike').textContent = isDaily 
-                    ? `Min: ${Math.round(data.temp.min)}°` 
+                    ? `Min: ${Math.round(data.temp.min)}${unitSymbol}` 
                     : `Hissedilen: ${Math.round(feelsLikeValue)}${unitSymbol}`;
                 
                 skycons.set("currentIcon", getSkyconName(data.weather[0].icon));
                 skycons.play();
 
-                document.getElementById('windSpeed').textContent = `${(data.wind_speed * 3.6).toFixed(1)} ${speedUnit}`;
+                // OpenWeatherMap API returns m/s for metric and mph for imperial
+                const windSpeed = currentUnits === 'metric' ? (data.wind_speed * 3.6).toFixed(1) : data.wind_speed.toFixed(1);
+                document.getElementById('windSpeed').textContent = `${windSpeed} ${speedUnit}`;
                 document.getElementById('humidity').textContent = `%${data.humidity}`;
                 document.getElementById('pressure').textContent = `${data.pressure} hPa`;
                 
-                // GÜNCELLENDİ: Görüş mesafesi verisini güvenli bir şekilde işle
+                // UPDATED: Process visibility data safely
                 const visibilityElement = document.getElementById('visibility');
                 if (data.visibility !== undefined && data.visibility !== null) {
                     visibilityElement.parentElement.classList.remove('hidden');
                     visibilityElement.textContent = `${(data.visibility / 1000).toFixed(1)} km`;
                 } else {
-                    // Günlük tahminde bu veri olmayacağı için gizle
+                    // Hide since this data won't be available in daily forecast
                     visibilityElement.parentElement.classList.add('hidden');
                 }
                 
@@ -299,7 +301,7 @@
             }
 
             function displayUvIndex(uvi) {
-                // GÜNCELLENDİ: uvi değeri 0 olduğunda yanlış sonuç vermemesi için `??` kullan
+                // UPDATED: Use `??` to prevent wrong result when uvi value is 0
                 const uviValue = uvi ?? 0;
                 const levels = [
                     { limit: 2, text: 'Düşük' }, { limit: 5, text: 'Orta' },
@@ -324,7 +326,7 @@
             }
 
             function displayAirQuality(aqData) {
-                if (!aqData || !aqData.list || !aqData.list.length === 0) return;
+                if (!aqData || !aqData.list || aqData.list.length === 0) return;
                 const aqiValue = aqData.list[0].main.aqi;
                 const levels = [ { text: 'İyi' }, { text: 'Orta' }, { text: 'Hassas' }, { text: 'Sağlıksız' }, { text: 'Çok Sağlıksız' } ];
                 const currentLevel = levels[aqiValue - 1] || levels[0];
@@ -375,7 +377,8 @@
             
             function displayHourlyForecast(hourlyData) {
                 const container = hourlyForecastContainer;
-                container.innerHTML = ''; // Önceki içeriği temizle
+                container.innerHTML = ''; // Clear previous content
+                const unitSymbol = currentUnits === 'metric' ? '°C' : '°F';
 
                 hourlyData.slice(0, 24).forEach((hour, index) => {
                     const card = document.createElement('div');
@@ -389,7 +392,7 @@
                     card.innerHTML = `
                         <p class="font-semibold text-sm">${time}</p>
                         <canvas id="hourly-icon-${index}" width="48" height="48"></canvas>
-                        <p class="text-xl font-bold">${temp}°</p>
+                        <p class="text-xl font-bold">${temp}${unitSymbol}</p>
                     `;
 
                     container.appendChild(card);
@@ -477,6 +480,7 @@
             function displayForecast(dailyData) {
                 const forecastContainer = document.getElementById('forecast');
                 forecastContainer.innerHTML = ''; 
+                const unitSymbol = currentUnits === 'metric' ? '°C' : '°F';
                 dailyData.slice(0, 5).forEach((day, index) => {
                     const dayName = new Date(day.dt * 1000).toLocaleDateString('tr-TR', { weekday: 'short' });
                     const tempGradient = getTempGradient(day.temp.max);
@@ -490,8 +494,8 @@
                         <p class="font-bold text-center">${dayName}</p>
                         <div class="flex-grow flex flex-col items-center justify-center my-2">
                             <canvas id="icon${index}" width="56" height="56"></canvas>
-                            <p class="text-3xl font-bold mt-2">${Math.round(day.temp.max)}°</p>
-                            <p class="text-lg opacity-80">${Math.round(day.temp.min)}°</p>
+                            <p class="text-3xl font-bold mt-2">${Math.round(day.temp.max)}${unitSymbol}</p>
+                            <p class="text-lg opacity-80">${Math.round(day.temp.min)}${unitSymbol}</p>
                         </div>
                         <p class="text-center text-sm capitalize">${day.weather[0].description}</p>
                     `;
@@ -501,7 +505,7 @@
                 skyconsForecast.play();
             }
 
-            // --- Yardımcı Fonksiyonlar ---
+            // --- Helper Functions ---
             function handleSearch(query) {
                 const city = query.trim();
                 if (city) getWeatherData({ city });
@@ -598,7 +602,7 @@
                 document.getElementById('theme-icon-dark').classList.toggle('hidden', !isDark);
             }
 
-            // --- Uygulamayı Başlat ---
+            // --- Start Application ---
             initializeApp();
         });
     </script>

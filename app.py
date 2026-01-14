@@ -9,9 +9,12 @@ app = Flask(__name__)
 
 API_KEY = os.environ.get("OPENWEATHER_API_KEY")
 
+# API request timeout in seconds
+REQUEST_TIMEOUT = 10
 
 
-# Koordinatlar arası mesafeyi km cinsinden hesaplar (Haversine)
+
+# calculate km from coordinates
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -22,7 +25,7 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * c
 
 
-# Nominatim ile koordinattan mahalle/ilçe/şehir adı al
+# Get neighborhood/county/city name from coordinates using Nominatim
 def get_location_name_from_coords(lat, lon):
     try:
         url = "https://nominatim.openstreetmap.org/reverse"
@@ -33,10 +36,10 @@ def get_location_name_from_coords(lat, lon):
             'addressdetails': 1
         }
         headers = {
-            'User-Agent': 'weather-app/1.0 (youremail@example.com)'  # Zorunlu
+            'User-Agent': 'weather-app/1.0'  # Required by Nominatim
         }
 
-        response = requests.get(url, params=params, headers=headers)
+        response = requests.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         data = response.json()
 
@@ -50,16 +53,19 @@ def get_location_name_from_coords(lat, lon):
         return f"Konum adı alınamadı: {e}"
 
 
-# Ana hava verisi alma fonksiyonu
+# Main weather data fetching function
 def fetch_weather_data(params):
-    geocoding_url = "http://api.openweathermap.org/geo/1.0/direct"
+    if not API_KEY:
+        return jsonify({"error": "API anahtarı yapılandırılmamış. OPENWEATHER_API_KEY ortam değişkenini ayarlayın."}), 500
+    
+    geocoding_url = "https://api.openweathermap.org/geo/1.0/direct"
     one_call_url = "https://api.openweathermap.org/data/3.0/onecall"
-    air_pollution_url = "http://api.openweathermap.org/data/2.5/air_pollution"
+    air_pollution_url = "https://api.openweathermap.org/data/2.5/air_pollution"
 
     try:
         if 'q' in params:
             geo_params = {'q': params['q'], 'limit': 1, 'appid': API_KEY}
-            geo_response = requests.get(geocoding_url, params=geo_params)
+            geo_response = requests.get(geocoding_url, params=geo_params, timeout=REQUEST_TIMEOUT)
             geo_response.raise_for_status()
             geo_data = geo_response.json()
             if not geo_data:
@@ -79,7 +85,7 @@ def fetch_weather_data(params):
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Geocoding API hatası: {str(e)}"}), 502
 
-    # Hava durumu ve hava kirliliği API çağrıları
+    # Weather and air pollution API calls
     one_call_params = {
         'lat': lat,
         'lon': lon,
@@ -92,11 +98,11 @@ def fetch_weather_data(params):
     air_params = {'lat': lat, 'lon': lon, 'appid': API_KEY}
 
     try:
-        one_call_resp = requests.get(one_call_url, params=one_call_params)
+        one_call_resp = requests.get(one_call_url, params=one_call_params, timeout=REQUEST_TIMEOUT)
         one_call_resp.raise_for_status()
         weather_data = one_call_resp.json()
 
-        air_resp = requests.get(air_pollution_url, params=air_params)
+        air_resp = requests.get(air_pollution_url, params=air_params, timeout=REQUEST_TIMEOUT)
         air_resp.raise_for_status()
         air_data = air_resp.json()
     except requests.exceptions.RequestException as e:
