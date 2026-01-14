@@ -48,9 +48,10 @@ def get_location_name_from_coords(lat, lon):
         ilce = address.get("county")
         sehir = address.get("city") or address.get("town") or address.get("village")
 
-        return ", ".join(filter(None, [mahalle, ilce, sehir])) or "Konum adı alınamadı"
+        return ", ".join(filter(None, [mahalle, ilce, sehir])) or "Konum"
     except Exception as e:
-        return f"Konum adı alınamadı: {e}"
+        # Return simple location name on error instead of technical details
+        return "Konum"
 
 
 # Main weather data fetching function
